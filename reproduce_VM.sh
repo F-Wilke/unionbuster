@@ -21,7 +21,7 @@ echo "Running the two containers..."
 IMAGE_PATH=nginx_infected_local:latest
 CONTAINER_NAMES=(infected_1 infected_2)
 for n in ${CONTAINER_NAMES[@]}; do
-    sudo docker run --runtime=runsc -d --name ${n} $IMAGE_PATH
+    sudo docker run --runtime=runc -d --name ${n} $IMAGE_PATH
     # sudo docker run -d --name ${n} $IMAGE_PATH
     # for p in ${PROGRAMS[@]}; do
     #     sudo docker cp ${p} ${n}:/
