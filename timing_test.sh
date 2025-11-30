@@ -1,46 +1,22 @@
 #!/bin/sh
 
+#read first argument 
+TARGET_PAGE=$1
+MEASURE_PAGE_COUNT=$2
 
-echo -e "\nEvicting page cache on this machine..."
-sync
-echo 1 | sudo tee -a /proc/sys/vm/drop_caches
-echo "========> Entire OS Page Cache is now evicted."
+# repeat 100 times, print output only for first and last iteration
+echo -e "\n---> [infected_1]: ./read_page /usr/sbin/nginx-debug $TARGET_PAGE"
 
-echo -e "\n---> [infected_1]: ./read_page ../../gvisor/bin/runsc 0"
-./read_page ../../gvisor/bin/runsc 10
-sync
-echo 1 | sudo tee -a /proc/sys/vm/drop_caches
-./read_page ../../gvisor/bin/runsc 10
-sync
-echo 1 | sudo tee -a /proc/sys/vm/drop_caches
-./read_page ../../gvisor/bin/runsc 10
-sync
-echo 1 | sudo tee -a /proc/sys/vm/drop_caches
-./read_page ../../gvisor/bin/runsc 10
-sync
-echo 1 | sudo tee -a /proc/sys/vm/drop_caches
-./read_page ../../gvisor/bin/runsc 10
-sync
-echo 1 | sudo tee -a /proc/sys/vm/drop_caches
-./read_page ../../gvisor/bin/runsc 10
-sync
-echo 1 | sudo tee -a /proc/sys/vm/drop_caches
-./read_page ../../gvisor/bin/runsc 10
-
-echo -e "\nEvicting page cache on this machine..."
-sync
-echo 1 | sudo tee -a /proc/sys/vm/drop_caches
-echo "========> Entire OS Page Cache is now evicted."
-
-./read_page ../../gvisor/bin/runsc 10
-./read_page ../../gvisor/bin/runsc 10
-./read_page ../../gvisor/bin/runsc 10
-./read_page ../../gvisor/bin/runsc 10
-./read_page ../../gvisor/bin/runsc 10
-./read_page ../../gvisor/bin/runsc 10
-./read_page ../../gvisor/bin/runsc 10
+for i in $(seq 1 100); do
+    if [ $i -eq 1 ] || [ $i -eq 100 ]; then
+        echo -e "\nIteration $i:"
+        LD_BIND_NOW=1 ./read_page /usr/sbin/nginx-debug $TARGET_PAGE
+    else
+        LD_BIND_NOW=1 ./read_page /usr/sbin/nginx-debug $TARGET_PAGE > /dev/null
+    fi
+done
 
 echo "========> Last page of /usr/sbin/nginx-debug is now loaded in the page cache."
-echo -e "\n---> [infected_2]: ./spy_on ../../gvisor/bin/runsc"
-./spy_on ../../gvisor/bin/runsc
+echo -e "\n---> [infected_2]: ./spy_on /usr/sbin/nginx-debug"
+LD_BIND_NOW=1 ./spy_on /usr/sbin/nginx-debug $MEASURE_PAGE_COUNT
 echo -e "========> infected_2 has received the message from infected_1.\n"

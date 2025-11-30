@@ -23,4 +23,4 @@ CMD ["nginx", "-g", "daemon off;"]
 
 #how to build and run:
 # docker build -t union-buster .
-# sudo docker run --runtime=runc -d --name gv1 union-buster:latest
+# sudo docker run --runtime=runsc -d --name gv1 union-buster:latest

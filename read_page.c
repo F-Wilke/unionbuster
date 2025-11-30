@@ -62,6 +62,8 @@ int main(int argc, char *argv[]) {
     size_t pg_size = sysconf(_SC_PAGESIZE);
     char buff[pg_size];
 
+    printf("page size = %zu\n", pg_size);
+
     if (argc < 2) {
         printf("Needs 1 arg.\n");
         exit(EBADF);
@@ -117,6 +119,8 @@ int main(int argc, char *argv[]) {
     // priniciple.
     clock_t map_begin = COUNTER_FUNC();
     uint64_t map_begin_ns = CLOCK_FUNC();
+
+#if MMAP_FILE
     void *mapped_to = mmap(NULL, f_map_stat.st_size,
                            PROT_EXEC, MAP_SHARED, f_map, 0);
 
@@ -126,7 +130,7 @@ int main(int argc, char *argv[]) {
             (map_end - map_begin),
             (map_end_ns - map_begin_ns),
             (double)(map_end - map_begin) / (double)(map_end_ns - map_begin_ns));
-
+#endif
     if (argc == 3)
     {
         clock_t seek_begin = COUNTER_FUNC();
@@ -135,6 +139,7 @@ int main(int argc, char *argv[]) {
 	    lseek(f_map, pg_size * page_to_read, SEEK_SET);
         clock_t seek_end = COUNTER_FUNC();
         uint64_t seek_end_ns = CLOCK_FUNC();
+        printf("Seeked to pos 0x%llx -> page %d\n", (unsigned long long)(pg_size * page_to_read), page_to_read);
         printf("Seek time: %lu, %lu, ratio=%f\n",
                (seek_end - seek_begin),
                (seek_end_ns - seek_begin_ns),
@@ -143,15 +148,6 @@ int main(int argc, char *argv[]) {
     
     for (size_t i = 0; i < file_pgs; i++)
     {
-        clock_t seek_begin = COUNTER_FUNC();
-        uint64_t seek_begin_ns = CLOCK_FUNC();
-        lseek(f_map, (pg_size * i * -1) - pg_size * page_to_read, SEEK_END);
-        clock_t seek_end = COUNTER_FUNC();
-        uint64_t seek_end_ns = CLOCK_FUNC();
-         printf("Seek time: %lu, %lu, ratio=%f\n",
-             (seek_end - seek_begin),
-             (seek_end_ns - seek_begin_ns),
-             (double)(seek_end - seek_begin) / (double)(seek_end_ns - seek_begin_ns));
         
         //double time_spent = 0.0;
         clock_t begin = COUNTER_FUNC();
