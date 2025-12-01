@@ -11,6 +11,14 @@ if [ ! -z "$1" ]; then
     TARGET_PAGE=$1
 fi
 
+RUNTIME=runsc
+
+#overload default runtime if provided
+if [ ! -z "$2" ]; then
+    RUNTIME=$2
+fi
+
+
 set -e
 
 docker --version
@@ -19,7 +27,8 @@ echo "Running the two containers..."
 IMAGE_PATH=union-buster:latest
 CONTAINER_NAMES=(infected_1 infected_2)
 for n in ${CONTAINER_NAMES[@]}; do
-    sudo docker run --runtime=runc -d --name ${n} $IMAGE_PATH
+    echo "sudo docker run --runtime=$RUNTIME -d --name ${n} $IMAGE_PATH"
+    sudo docker run --runtime=$RUNTIME -d --name ${n} $IMAGE_PATH
 done
 
 echo -e "\n------------------------------ CONTAINERS ------------------------------"
