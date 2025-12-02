@@ -6,7 +6,7 @@ dkr:
 
 dkr-run: dkr
 	sudo docker rm -f gv1 || true
-	sudo docker run --runtime=runsc -d --name gv1 union-buster:latest
+	sudo docker run --runtime=runsc-kvm -d --name gv1 union-buster:latest
 
 dkr-native-run: dkr
 	sudo docker rm -f gv1 || true

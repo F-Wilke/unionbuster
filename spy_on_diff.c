@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 
 #define USE_READ_FOR_PROBING 1
 #define OPEN_PER_PAGE 1
@@ -93,7 +94,10 @@ int main(int argc, char *argv[])
     
     close(f_map);
 
-
+    //time the entire process to calculate bandwidth
+    struct timespec current_time;
+    clock_gettime(CLOCK_REALTIME, &current_time);
+    time_t begin = current_time.tv_nsec;
 
 
     // two measurement in randomized page order and offset
@@ -104,19 +108,22 @@ int main(int argc, char *argv[])
     results[first] = measure_page_access_cycles(f_map, pg_size, buff, first, argv[1]);
     results[second] = measure_page_access_cycles(f_map, pg_size, buff, second, argv[1]);
     
-
+    clock_gettime(CLOCK_REALTIME, &current_time);
+    time_t end = current_time.tv_nsec;
+    
     printf("Page 0: %lu cycles\n",
-            results[0]);
+        results[0]);
     printf("Page 1: %lu cycles\n",
-            results[1]);
-
+        results[1]);
+        
     //print results
     if (results[0] < results[1]) {
         printf("Encoded bit is 0\n");
     } else {
         printf("Encoded bit is 1\n");
     }
-
-
+    
+    printf("Total time: %ld nanoseconds\n", end - begin);
+            
     return 0;
 }

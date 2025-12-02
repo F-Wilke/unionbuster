@@ -35,6 +35,18 @@ echo -e "\n------------------------------ CONTAINERS ---------------------------
 sudo docker container ls
 echo -e "------------------------------------------------------------------------\n"
 
+
+echo -e "\nEvicting page cache on the host..."
+sync
+echo 1 | sudo tee -a /proc/sys/vm/drop_caches
+echo "========> Entire OS Page Cache is now evicted."
+
+echo -e "\n---> [infected_2]: /workspace/spy_on_diff  /usr/sbin/nginx-debug"
+sudo docker exec -it infected_2 /workspace/spy_on_diff  /usr/sbin/nginx-debug 
+echo -e "========> infected_2 has received the message from infected_1.\n"
+
+
+
 echo -e "\nEvicting page cache on the host..."
 sync
 echo 1 | sudo tee -a /proc/sys/vm/drop_caches
