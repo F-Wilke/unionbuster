@@ -43,8 +43,8 @@ echo "========> Entire OS Page Cache is now evicted."
 echo -e "\n---> [infected_1]: /workspace/read_page /usr/sbin/nginx-debug $TARGET_PAGE"
 sudo docker exec -it infected_1 /workspace/read_page /usr/sbin/nginx-debug $TARGET_PAGE
 echo "========> page $TARGET_PAGE of /usr/sbin/nginx-debug is now loaded in the page cache."
-echo -e "\n---> [infected_2]: /workspace/spy_on_diff  /usr/sbin/nginx-debug"
-sudo docker exec -it infected_2 /workspace/spy_on_diff  /usr/sbin/nginx-debug 
+echo -e "\n---> [infected_2]: /workspace/spy_on_mmap  /usr/sbin/nginx-debug"
+sudo docker exec -it infected_2 /workspace/spy_on_mmap  /usr/sbin/nginx-debug 
 echo -e "========> infected_2 has received the message from infected_1.\n"
 
 echo "Cleanup..."

@@ -14,7 +14,7 @@ WORKDIR /workspace
 COPY . /workspace
 
 
-COPY runsc /gvisor/bin/runsc
+#COPY runsc /gvisor/bin/runsc
 
 RUN make
 

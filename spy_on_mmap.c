@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 #define USE_READ_FOR_PROBING 1
+#define MMAP_PER_PAGE 1
 #define OPEN_PER_PAGE 1
 
 // Minimal portion of pages in spied file needed for the file being
@@ -38,6 +39,7 @@ static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, cha
 {
     uint64_t start, end;
 
+#if OPEN_PER_PAGE
     start = rdtsc();
     f_map = open(file_path, O_RDONLY);
     end = rdtsc();
@@ -46,16 +48,36 @@ static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, cha
         exit(errno);
     }
     printf("Open took %lu cycles\n", end - start);
+#endif
+
+#if MMAP_PER_PAGE
+    start = rdtsc();
+    void *mapped_to = mmap(NULL, pg_size,
+		    	   PROT_READ, MAP_SHARED, f_map, pg_size * page_to_read);
+    end = rdtsc();
+    if (mapped_to == MAP_FAILED) {
+        perror("mmap");
+	exit(errno);
+    }
+    printf("Mmap took %lu cycles\n", end - start);
+#endif
 
     lseek(f_map, pg_size * page_to_read, SEEK_SET);
 
     start = rdtsc();
     read(f_map, buff, pg_size);
+    //int temp = *((int*)mapped_to);
     end = rdtsc();
 
     return end - start;
-    close(f_map);
 
+    #if MMAP_PER_PAGE
+    munmap(mapped_to, pg_size);
+    #endif
+
+    #if OPEN_PER_PAGE
+    close(f_map);
+    #endif
 }
 
 
