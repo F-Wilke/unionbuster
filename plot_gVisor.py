@@ -60,9 +60,12 @@ def main():
     args = parse_args()
     
     if args.diff:
-        plot_diff(args.arr0, args.arr1, args.title, args.out)
-    else:
-        plot(args.p0, args.p1, args.std0, args.std1, args.title, args.out)
+        diff_title = args.title + " - Differences"
+        diff_out = "diff_" + args.out
+        plot_diff(args.arr0, args.arr1, diff_title, diff_out)
+    
+    avg_title = args.title + " - Average"
+    plot(args.p0, args.p1, args.std0, args.std1, avg_title, args.out)
 
 if __name__ == "__main__":
     main()

@@ -83,78 +83,55 @@ for ((i=1; i<=$ITERS; i++)); do
 
 done
 
-if [ "$DIFF" -eq 1 ]; then
-    if [ "$MMAP" -eq 1 ]; then
-        if [ "$TARGET_PAGE" -eq 0 ]; then
-	    title="Priming Page 0 (MMAP) Differences"
-            out="diff_mmap_p0_prime.png"
-        elif [ "$TARGET_PAGE" -eq 1 ]; then
-	    title="Priming Page 1 (MMAP) Differences"
-            out="diff_mmap_p1_prime.png"
-        else
-	    title="No Priming (MMAP) Differences"
-            out="diff_mmap_no_prime.png"
-        fi
+p0_str="${page0_cycles[*]}"
+p1_str="${page1_cycles[*]}"
+
+read avg0 std0 <<< $(echo "$p0_str" | awk '{
+    sum=0; sumsq=0; n=NF;
+    for(i=1;i<=NF;i++){sum+=$i; sumsq+=$i*$i}
+    mean=sum/n; std=sqrt(sumsq/n - mean*mean);
+    print mean, std
+}')
+
+read avg1 std1 <<< $(echo "$p1_str" | awk '{
+    sum=0; sumsq=0; n=NF;
+    for(i=1;i<=NF;i++){sum+=$i; sumsq+=$i*$i}
+    mean=sum/n; std=sqrt(sumsq/n - mean*mean);
+    print mean, std
+}')
+
+echo "Page 0: mean=$avg0, std=$std0"
+echo "Page 1: mean=$avg1, std=$std1"
+
+title=""
+out=""
+
+if [ "$MMAP" -eq 1 ]; then
+    if [ "$TARGET_PAGE" -eq 0 ]; then
+	title="Priming Page 0 (MMAP)"
+        out="mmap_p0_prime.png"
+    elif [ "$TARGET_PAGE" -eq 1 ]; then
+	title="Priming Page 1 (MMAP)"
+        out="mmap_p1_prime.png"
     else
-        if [ "$TARGET_PAGE" -eq 0 ]; then
-            title="Priming Page 0 Differences"
-            out="diff_p0_prime.png"
-        elif [ "$TARGET_PAGE" -eq 1 ]; then
-            title="Priming Page 1 Differences"
-            out="diff_p1_prime.png"
-        else
-            title="No Priming Differences"
-            out="diff_no_prime.png"
-        fi
-    fi   
-    python3 plot_gVisor.py --arr0 "${page0_cycles[@]}" --arr1 "${page1_cycles[@]}" --title "$title" --out "$out" --diff
-else
-    p0_str="${page0_cycles[*]}"
-    p1_str="${page1_cycles[*]}"
-
-    read avg0 std0 <<< $(echo "$p0_str" | awk '{
-        sum=0; sumsq=0; n=NF;
-        for(i=1;i<=NF;i++){sum+=$i; sumsq+=$i*$i}
-        mean=sum/n; std=sqrt(sumsq/n - mean*mean);
-        print mean, std
-    }')
-
-    read avg1 std1 <<< $(echo "$p1_str" | awk '{
-        sum=0; sumsq=0; n=NF;
-        for(i=1;i<=NF;i++){sum+=$i; sumsq+=$i*$i}
-        mean=sum/n; std=sqrt(sumsq/n - mean*mean);
-        print mean, std
-    }')
-
-    echo "Page 0: mean=$avg0, std=$std0"
-    echo "Page 1: mean=$avg1, std=$std1"
-
-    title=""
-    out=""
-
-    if [ "$MMAP" -eq 1 ]; then
-        if [ "$TARGET_PAGE" -eq 0 ]; then
-	    title="Priming Page 0 (MMAP)"
-            out="mmap_p0_prime.png"
-        elif [ "$TARGET_PAGE" -eq 1 ]; then
-	    title="Priming Page 1 (MMAP)"
-            out="mmap_p1_prime.png"
-        else
-	    title="No Priming (MMAP)"
-            out="mmap_no_prime.png"
-        fi
-    else
-        if [ "$TARGET_PAGE" -eq 0 ]; then
-            title="Priming Page 0"
-            out="p0_prime.png"
-        elif [ "$TARGET_PAGE" -eq 1 ]; then
-            title="Priming Page 1"
-            out="p1_prime.png"
-        else
-            title="No Priming"
-            out="no_prime.png"
-        fi
+	title="No Priming (MMAP)"
+        out="mmap_no_prime.png"
     fi
+else
+    if [ "$TARGET_PAGE" -eq 0 ]; then
+        title="Priming Page 0"
+        out="p0_prime.png"
+    elif [ "$TARGET_PAGE" -eq 1 ]; then
+        title="Priming Page 1"
+        out="p1_prime.png"
+    else
+        title="No Priming"
+        out="no_prime.png"
+    fi
+fi
 
+if [ "$DIFF" -eq 1 ]; then   
+    python3 plot_gVisor.py --p0 "$avg0" --p1 "$avg1" --std0 "$std0" --std1 "$std1" --arr0 "${page0_cycles[@]}" --arr1 "${page1_cycles[@]}" --title "$title" --out "$out" --diff
+else
     python3 plot_gVisor.py --p0 "$avg0" --p1 "$avg1" --std0 "$std0" --std1 "$std1" --title "$title" --out "$out"
 fi
