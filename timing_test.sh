@@ -20,6 +20,7 @@ for i in $(seq 1 100); do
     else
         LD_BIND_NOW=1 ./read_page $TARGET_FILE $TARGET_PAGE > /dev/null
     fi
+    echo 1 | sudo tee -a /proc/sys/vm/drop_caches
 done
 
 echo "========> Last page of $TARGET_FILE is now loaded in the page cache."

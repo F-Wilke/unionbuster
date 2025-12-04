@@ -10,6 +10,7 @@ def plot(p0, p1, std0, std1, title, out):
 
     plt.figure()
     plt.bar(x, cycles, yerr=stds, capsize=5)
+    # plt.yscale('log')  # log axis; yerr remains additive in data units
     plt.xticks(x, labels)
     plt.ylabel("Cycles")
     plt.title(title)
