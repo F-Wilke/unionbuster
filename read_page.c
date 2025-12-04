@@ -14,7 +14,7 @@
 #include <sys/types.h>
 
 #define USE_RDTSC
-
+#define MMAP_FILE 1
 
 static int PAGE_SIZE;
 

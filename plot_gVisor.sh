@@ -11,17 +11,26 @@ if [ ! -z "$1" ]; then
     TARGET_PAGE=$1
 fi
 
+MMAP=0 # default value
+
+#overload default MMAP enabled if provided
+if [ ! -z "$2" ]; then
+    MMAP=$2
+fi
+
 RUNTIME=runsc
 
 #overload default runtime if provided
-if [ ! -z "$2" ]; then
-    RUNTIME=$2
+if [ ! -z "$3" ]; then
+    RUNTIME=$3
 fi
 
 
 set -e
 
 docker --version
+
+DIFF=1
 
 ITERS=10
 
@@ -50,8 +59,15 @@ for ((i=1; i<=$ITERS; i++)); do
     echo -e "\n---> [infected_1]: /workspace/read_page /usr/sbin/nginx-debug $TARGET_PAGE"
     sudo docker exec -it infected_1 /workspace/read_page /usr/sbin/nginx-debug $TARGET_PAGE
     echo "========> page $TARGET_PAGE of /usr/sbin/nginx-debug is now loaded in the page cache."
-    echo -e "\n---> [infected_2]: /workspace/spy_on_diff  /usr/sbin/nginx-debug"
-    output=$(sudo docker exec -it infected_2 /workspace/spy_on_diff  /usr/sbin/nginx-debug) 
+    
+    if [ "$MMAP" -eq 1 ]; then
+        echo -e "\n---> [infected_2]: /workspace/spy_on_mmap  /usr/sbin/nginx-debug"
+	output=$(sudo docker exec -it infected_2 /workspace/spy_on_mmap  /usr/sbin/nginx-debug)
+    else
+        echo -e "\n---> [infected_2]: /workspace/spy_on_diff  /usr/sbin/nginx-debug"
+        output=$(sudo docker exec -it infected_2 /workspace/spy_on_diff  /usr/sbin/nginx-debug) 
+    fi
+
     echo "$output"
     echo -e "========> infected_2 has received the message from infected_1.\n"
 
@@ -90,15 +106,32 @@ echo "Page 1: mean=$avg1, std=$std1"
 title=""
 out=""
 
-if [ "$TARGET_PAGE" -eq 0 ]; then
-    title="Priming Page 0"
-    out="p0_prime.png"
-elif [ "$TARGET_PAGE" -eq 1 ]; then
-    title="Priming Page 1"
-    out="p1_prime.png"
+if [ "$MMAP" -eq 1 ]; then
+    if [ "$TARGET_PAGE" -eq 0 ]; then
+	title="Priming Page 0 (MMAP)"
+        out="mmap_p0_prime.png"
+    elif [ "$TARGET_PAGE" -eq 1 ]; then
+	title="Priming Page 1 (MMAP)"
+        out="mmap_p1_prime.png"
+    else
+	title="No Priming (MMAP)"
+        out="mmap_no_prime.png"
+    fi
 else
-    title="No Priming"
-    out="no_prime.png"
+    if [ "$TARGET_PAGE" -eq 0 ]; then
+        title="Priming Page 0"
+        out="p0_prime.png"
+    elif [ "$TARGET_PAGE" -eq 1 ]; then
+        title="Priming Page 1"
+        out="p1_prime.png"
+    else
+        title="No Priming"
+        out="no_prime.png"
+    fi
 fi
 
-python3 plot_gVisor.py --p0 "$avg0" --p1 "$avg1" --std0 "$std0" --std1 "$std1" --title "$title" --out "$out"
+if [ "$DIFF" -eq 1 ]; then   
+    python3 plot_gVisor.py --p0 "$avg0" --p1 "$avg1" --std0 "$std0" --std1 "$std1" --arr0 "${page0_cycles[@]}" --arr1 "${page1_cycles[@]}" --title "$title" --out "$out" --diff
+else
+    python3 plot_gVisor.py --p0 "$avg0" --p1 "$avg1" --std0 "$std0" --std1 "$std1" --title "$title" --out "$out"
+fi
