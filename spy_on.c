@@ -73,15 +73,17 @@ static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, cha
     read(f_map, buff, pg_size);
     end = rdtsc();
 
-    return end - start;
-
+    
     #if MMAP_PER_PAGE
     munmap(mapped_to, pg_size);
     #endif
-
+    
     #if OPEN_PER_PAGE
     close(f_map);
     #endif
+
+    
+    return end - start;
 }
 
 static inline uint64_t measure_random_page_word_access_cycles(char *page_addr)

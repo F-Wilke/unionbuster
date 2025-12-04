@@ -53,9 +53,9 @@ static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, cha
     start = rdtsc();
     read(f_map, buff, pg_size);
     end = rdtsc();
-
-    return end - start;
+    
     close(f_map);
+    return end - start;
 
 }
 
