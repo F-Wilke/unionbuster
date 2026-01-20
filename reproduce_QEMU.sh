@@ -21,9 +21,9 @@ fi
 
 set -e
 
-# start two VMs if $3 set
+# start two VMs if $4 set
 
-if [ ! -z "$3" ]; then
+if [ ! -z "$4" ]; then
     echo -e "\nStarting two VMs (vmA and vmB)..."
 
     sudo qemu-system-x86_64 \
@@ -53,16 +53,19 @@ echo "========> Entire OS Page Cache is now evicted."
 
 
 
-# run read_page /usr/sbin/nginx-debug $TARGET_PAGE in VM1
-echo -e "\n---> [VM1]: ./read_page $TARGET_PATH $TARGET_PAGE"
+#only prime if $3 is set
+if [ ! -z "$3" ]; then
+    # run read_page /usr/sbin/nginx-debug $TARGET_PAGE in VM1
+    echo -e "\n---> [VM1]: ./read_page $TARGET_PATH $TARGET_PAGE"
 
-ssh -p 2222 root@localhost << EOF
-echo 1 | tee -a /proc/sys/vm/drop_caches
+    ssh -p 2222 root@localhost << EOF
+    echo 1 | tee -a /proc/sys/vm/drop_caches
 
-cd ~/unionbuster
-./read_page $TARGET_PATH $TARGET_PAGE
+    cd ~/unionbuster
+    LD_BIND_NOW=1 ./read_page $TARGET_PATH $TARGET_PAGE
 EOF
 
+fi
 
 echo -e "\n---> [VM2]: ./spy_on $TARGET_PATH $MEASURE_PAGE_COUNT"
 
@@ -70,7 +73,7 @@ ssh -p 2223 root@localhost << EOF
 echo 1 | tee -a /proc/sys/vm/drop_caches
 
 cd ~/unionbuster
-./spy_on $TARGET_PATH $MEASURE_PAGE_COUNT
+LD_BIND_NOW=1 ./spy_on $TARGET_PATH $MEASURE_PAGE_COUNT
 EOF
 
 echo "Done."

@@ -11,10 +11,12 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 
 #define USE_READ_FOR_PROBING 1
 #define MMAP_PER_PAGE 0
@@ -39,9 +41,13 @@ static inline uint64_t rdtsc(void)
     return ((uint64_t)hi << 32) | lo;
 }
 
-static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, char* buff, int page_to_read, char* file_path)
+static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, char* buff, int page_to_read, char* file_path,
+                                                    uint64_t *open_cycles, uint64_t *mmap_cycles, uint64_t *read_ns)
 {
     uint64_t start, end;
+    //rt clock structs
+    struct timespec ts_start, ts_end;
+    clock_gettime(CLOCK_REALTIME, &ts_start);
 
 #if OPEN_PER_PAGE
     start = rdtsc();
@@ -51,7 +57,7 @@ static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, cha
         perror("open");
         exit(errno);
     }
-    printf("Open took %lu cycles\n", end - start);
+    if (open_cycles) *open_cycles = end - start;
 #endif
 
 
@@ -64,7 +70,7 @@ static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, cha
         perror("mmap");
         exit(errno);
     }
-    printf("Mmap took %lu cycles\n", end - start);
+    if (mmap_cycles) *mmap_cycles = end - start;
 #endif
 
     lseek(f_map, pg_size * page_to_read, SEEK_SET);
@@ -81,7 +87,13 @@ static inline uint64_t measure_page_access_cycles(int f_map, size_t pg_size, cha
     #if OPEN_PER_PAGE
     close(f_map);
     #endif
+    
+    clock_gettime(CLOCK_REALTIME, &ts_end);
 
+    if (read_ns) {
+        *read_ns = (ts_end.tv_sec - ts_start.tv_sec) * 1000000000 +
+                   (ts_end.tv_nsec - ts_start.tv_nsec);
+    }
     
     return end - start;
 }
@@ -104,21 +116,33 @@ int main(int argc, char *argv[])
     struct stat f_map_stat;
     size_t file_pgs;
     size_t pg_size = sysconf(_SC_PAGESIZE);
-    char buff[pg_size];    
+    char buff[pg_size];
+    bool verbose = false;
+    int arg_idx = 1;
 
-    if (argc < 2) {
-        printf("Needs 1 arg at least.\n");
+    // Check for -v flag
+    if (argc >= 2 && strcmp(argv[1], "-v") == 0) {
+        verbose = true;
+        arg_idx = 2;
+    }
+
+    if (argc < arg_idx + 1) {
+        fprintf(stderr, "Usage: %s [-v] <file> [num_pages] [at_least_pgs]\n", argv[0]);
         exit(EBADF);
-    } else if (argc == 4) {
+    }
+    
+    // Check if we have the at_least_pgs parameter
+    int adjusted_argc = argc - (verbose ? 1 : 0);
+    if (adjusted_argc == 4) {
         char *end;
-        float f = strtof(argv[3], &end);
+        float f = strtof(argv[arg_idx + 2], &end);
         if (f)
             at_least_pgs = f;
     }
 
-    f_map = open(argv[1], O_RDONLY);
+    f_map = open(argv[arg_idx], O_RDONLY);
     if (f_map == -1) {
-        printf("Failed to open file %s\n", argv[1]);
+        fprintf(stderr, "Failed to open file %s\n", argv[arg_idx]);
         exit(errno);
     }
 
@@ -137,11 +161,16 @@ int main(int argc, char *argv[])
     
     file_pgs = (f_map_stat.st_size + (pg_size - 1)) / pg_size;
 
-    if (argc > 2) {
+    if (argc > arg_idx + 1) {
         //override number of pages to consider
-        file_pgs = strtoul(argv[2], NULL, 10);
+        file_pgs = strtoul(argv[arg_idx + 1], NULL, 10);
     }
 
+    if (file_pgs == 0) {
+        fprintf(stderr, "Error: file_pgs is 0\n");
+        close(f_map);
+        return 1;
+    }
 
     // Map the file read-only; we just probe by reading.
     #if MY_MAP_FILE
@@ -179,8 +208,13 @@ int main(int argc, char *argv[])
     if (words_per_page == 0)
         words_per_page = 1;
 
-    if (argc == 4) {
-        // Poll until enough pages look "hot"
+    // Timing data collection
+    uint64_t total_open_cycles = 0, total_mmap_cycles = 0, total_read_ns = 0;
+    uint64_t min_cycles = UINT64_MAX, max_cycles = 0;
+    size_t num_measurements = 0;
+
+    if (adjusted_argc == 4) {
+        // Poll until enough pages look "hot" 
         do {
             int touched_pgs = 0;
 
@@ -196,7 +230,15 @@ int main(int argc, char *argv[])
                 size_t i = page_indices[idx];
                 
 #if USE_READ_FOR_PROBING || MMAP_PER_PAGE
-                uint64_t cycles = measure_page_access_cycles(f_map, pg_size, buff, i, argv[1]);
+                uint64_t open_cyc = 0, mmap_cyc = 0, read_ns_val = 0;
+                uint64_t cycles = measure_page_access_cycles(f_map, pg_size, buff, i, argv[arg_idx],
+                                                              &open_cyc, &mmap_cyc, &read_ns_val);
+                total_open_cycles += open_cyc;
+                total_mmap_cycles += mmap_cyc;
+                total_read_ns += read_ns_val;
+                num_measurements++;
+                if (cycles < min_cycles) min_cycles = cycles;
+                if (cycles > max_cycles) max_cycles = cycles;
 #else
                 size_t word_index = (size_t)rand() % words_per_page;
                 char *page_addr = mapped_to + i * pg_size + word_index * sizeof(int);
@@ -233,7 +275,15 @@ int main(int argc, char *argv[])
         for (size_t idx = 0; idx < file_pgs; idx++) {
             size_t i = page_indices[idx];
 #if USE_READ_FOR_PROBING
-            uint64_t cycles = measure_page_access_cycles(f_map, pg_size, buff, i, argv[1]);
+            uint64_t open_cyc = 0, mmap_cyc = 0, read_ns_val = 0;
+            uint64_t cycles = measure_page_access_cycles(f_map, pg_size, buff, i, argv[arg_idx],
+                                                          &open_cyc, &mmap_cyc, &read_ns_val);
+            total_open_cycles += open_cyc;
+            total_mmap_cycles += mmap_cyc;
+            total_read_ns += read_ns_val;
+            num_measurements++;
+            if (cycles < min_cycles) min_cycles = cycles;
+            if (cycles > max_cycles) max_cycles = cycles;
 #else
             size_t word_index = (size_t)rand() % words_per_page;
             char *page_addr = mapped_to + i * pg_size + word_index * sizeof(int);
@@ -243,16 +293,44 @@ int main(int argc, char *argv[])
                 continue;
             
             uint64_t cycles = measure_random_page_word_access_cycles(page_addr);
+            if (cycles < min_cycles) min_cycles = cycles;
+            if (cycles > max_cycles) max_cycles = cycles;
+            num_measurements++;
 #endif  
             resident_pages[i] = (cycles < CYCLE_THRESHOLD) ? 1 : 0;
-
-            //debug print
-            printf("Page %lu: %lu cycles -> %s\n",
-                   i, cycles,
-                   (cycles < CYCLE_THRESHOLD) ? "RESIDENT" : "NOT RESIDENT");
         }
     }
 
+    // Print CSV header if verbose
+    if (verbose) {
+        printf("filename,page_size,file_pages,num_measurements,min_cycles,max_cycles,avg_cycles");
+#if OPEN_PER_PAGE
+        printf(",avg_open_cycles");
+#endif
+#if MMAP_PER_PAGE
+        printf(",avg_mmap_cycles");
+#endif
+        printf(",avg_read_ns,resident_pattern\n");
+    }
+
+    // Print CSV data row
+    uint64_t avg_cycles = num_measurements > 0 ? (min_cycles + max_cycles) / 2 : 0;
+    printf("%s,%zu,%zu,%zu,%lu,%lu,%lu",
+           argv[arg_idx],
+           pg_size,
+           file_pgs,
+           num_measurements,
+           min_cycles,
+           max_cycles,
+           avg_cycles);
+#if OPEN_PER_PAGE
+    printf(",%lu", num_measurements > 0 ? total_open_cycles / num_measurements : 0);
+#endif
+#if MMAP_PER_PAGE
+    printf(",%lu", num_measurements > 0 ? total_mmap_cycles / num_measurements : 0);
+#endif
+    printf(",%lu,", num_measurements > 0 ? total_read_ns / num_measurements : 0);
+    
     for (size_t i = 0; i < file_pgs; i++)
         fputc('0' + (resident_pages[i] & 1), stdout);
     printf("\n");
