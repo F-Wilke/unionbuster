@@ -1,5 +1,10 @@
 cycle_jump
 read_page
 spy_on
+spy_on_diff
+logs/
 
 runsc
+
+rand0.bin
+rand1.bin
