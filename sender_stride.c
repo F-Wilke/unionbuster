@@ -1,10 +1,11 @@
 /*
  * Sender for strided page cache covert channel
- * Loads every 32nd page of a file into the page cache to encode information
+ * Loads every Nth page of a file into the page cache to encode information
  * 
- * Usage: ./sender_stride <file> <bit_pattern>
+ * Usage: ./sender_stride <file> <bit_pattern> [stride]
  *   bit_pattern: string of 0s and 1s indicating which pages to prime
- *                e.g., "10110" means prime pages 0, 64, 96 (indices 0, 2, 3)
+ *                e.g., "10110" means prime pages 0, N*2, N*3 (indices 0, 2, 3)
+ *   stride: page stride size (default: 32)
  */
 
 #define _GNU_SOURCE
@@ -22,7 +23,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#define PAGE_STRIDE 32
+#define DEFAULT_PAGE_STRIDE 32
 #define USE_RDTSC
 
 static inline uint64_t rdtsc(void) {
@@ -53,6 +54,7 @@ int main(int argc, char *argv[]) {
     char buff[pg_size];
     bool verbose = false;
     int arg_idx = 1;
+    size_t page_stride = DEFAULT_PAGE_STRIDE;
     
     // Check for -v flag
     if (argc >= 2 && strcmp(argv[1], "-v") == 0) {
@@ -61,15 +63,24 @@ int main(int argc, char *argv[]) {
     }
 
     if (argc < arg_idx + 2) {
-        fprintf(stderr, "Usage: %s [-v] <file> <bit_pattern>\n", argv[0]);
+        fprintf(stderr, "Usage: %s [-v] <file> <bit_pattern> [stride]\n", argv[0]);
         fprintf(stderr, "  bit_pattern: string of 0s and 1s (e.g., \"10110\")\n");
-        fprintf(stderr, "  Each bit controls PAGE_STRIDE*index page (STRIDE=%d)\n", PAGE_STRIDE);
+        fprintf(stderr, "  stride: page stride size (default: %d)\n", DEFAULT_PAGE_STRIDE);
+        fprintf(stderr, "  Each bit controls stride*index page\n");
         exit(1);
     }
     
     const char *filename = argv[arg_idx];
     const char *bit_pattern = argv[arg_idx + 1];
     size_t num_bits = strlen(bit_pattern);
+    
+    // Parse stride if provided
+    if (argc > arg_idx + 2) {
+        size_t requested_stride = strtoul(argv[arg_idx + 2], NULL, 10);
+        if (requested_stride > 0) {
+            page_stride = requested_stride;
+        }
+    }
     
     // Validate bit pattern
     for (size_t i = 0; i < num_bits; i++) {
@@ -106,13 +117,14 @@ int main(int argc, char *argv[]) {
     }
     
     size_t file_pgs = (f_map_stat.st_size + (pg_size - 1)) / pg_size;
-    size_t max_stride_pages = file_pgs / PAGE_STRIDE;
+    size_t max_stride_pages = file_pgs / page_stride;
     
     if (verbose) {
         fprintf(stderr, "File: %s\n", filename);
         fprintf(stderr, "File size: %ld bytes\n", f_map_stat.st_size);
         fprintf(stderr, "Page size: %zu bytes\n", pg_size);
         fprintf(stderr, "Total pages: %zu\n", file_pgs);
+        fprintf(stderr, "Page stride: %zu\n", page_stride);
         fprintf(stderr, "Max strided pages: %zu\n", max_stride_pages);
         fprintf(stderr, "Bit pattern: %s (%zu bits)\n", bit_pattern, num_bits);
     }
@@ -131,7 +143,7 @@ int main(int argc, char *argv[]) {
     // Prime pages according to bit pattern
     for (size_t bit_idx = 0; bit_idx < num_bits; bit_idx++) {
         if (bit_pattern[bit_idx] == '1') {
-            size_t page_num = bit_idx * PAGE_STRIDE;
+            size_t page_num = bit_idx * page_stride;
             off_t offset = (off_t)page_num * (off_t)pg_size;
             
             // Seek to page
@@ -186,13 +198,13 @@ int main(int argc, char *argv[]) {
     uint64_t avg_read_cycles = pages_primed > 0 ? total_read_cycles / pages_primed : 0;
     uint64_t avg_read_ns = pages_primed > 0 ? total_read_ns / pages_primed : 0;
     
-    printf("%zu,%s,%s,%zu,%zu,%d,%lu,%lu,%lu,%lu,%lu,%lu\n",
+    printf("%zu,%s,%s,%zu,%zu,%zu,%lu,%lu,%lu,%lu,%lu,%lu\n",
            pg_size,
            filename,
            bit_pattern,
            num_bits,
            pages_primed,
-           PAGE_STRIDE,
+           page_stride,
            (open_end_cycles - open_begin_cycles),
            (open_end_ns - open_begin_ns),
            avg_read_cycles,

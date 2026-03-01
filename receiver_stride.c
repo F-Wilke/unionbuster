@@ -1,10 +1,11 @@
 /*
  * Receiver for strided page cache covert channel
- * Times access to every 32nd page of a file to detect cached pages
+ * Times access to every Nth page of a file to detect cached pages
  * 
- * Usage: ./receiver_stride <file> [num_bits] [cycle_threshold]
+ * Usage: ./receiver_stride <file> [num_bits] [cycle_threshold] [stride]
  *   num_bits: number of strided pages to check (default: auto-detect)
- *   cycle_threshold: cycles threshold for cached vs not cached (default: 10000000)
+ *   cycle_threshold: cycles threshold for cached vs not cached (default: 100000)
+ *   stride: page stride size (default: 32)
  */
 
 #define _GNU_SOURCE
@@ -21,7 +22,7 @@
 #include <stdint.h>
 #include <time.h>
 
-#define PAGE_STRIDE 32
+#define DEFAULT_PAGE_STRIDE 32
 #define USE_READ_FOR_PROBING 1
 #define DEFAULT_CYCLE_THRESHOLD (100ULL * 1000ULL) //100k cycles as default threshold for cached vs not cached
 
@@ -76,6 +77,7 @@ int main(int argc, char *argv[])
     bool verbose = false;
     int arg_idx = 1;
     uint64_t cycle_threshold = DEFAULT_CYCLE_THRESHOLD;
+    size_t page_stride = DEFAULT_PAGE_STRIDE;
     
     // Check for -v flag
     if (argc >= 2 && strcmp(argv[1], "-v") == 0) {
@@ -84,9 +86,10 @@ int main(int argc, char *argv[])
     }
 
     if (argc < arg_idx + 1) {
-        fprintf(stderr, "Usage: %s [-v] <file> [num_bits] [cycle_threshold]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [-v] <file> [num_bits] [cycle_threshold] [stride]\n", argv[0]);
         fprintf(stderr, "  num_bits: number of strided pages to check (default: all available)\n");
         fprintf(stderr, "  cycle_threshold: threshold in cycles (default: %lu)\n", DEFAULT_CYCLE_THRESHOLD);
+        fprintf(stderr, "  stride: page stride size (default: %d)\n", DEFAULT_PAGE_STRIDE);
         exit(1);
     }
     
@@ -112,7 +115,7 @@ int main(int argc, char *argv[])
     }
     
     size_t file_pgs = (f_map_stat.st_size + (pg_size - 1)) / pg_size;
-    size_t max_stride_pages = file_pgs / PAGE_STRIDE;
+    size_t max_stride_pages = file_pgs / page_stride;
     size_t num_bits = max_stride_pages;
     
     // Override number of bits to check if specified
@@ -131,6 +134,19 @@ int main(int argc, char *argv[])
         }
     }
     
+    // Override stride if specified
+    if (argc > arg_idx + 3) {
+        size_t requested_stride = strtoul(argv[arg_idx + 3], NULL, 10);
+        if (requested_stride > 0) {
+            page_stride = requested_stride;
+            // Recalculate max_stride_pages and num_bits with new stride
+            max_stride_pages = file_pgs / page_stride;
+            if (argc <= arg_idx + 1) {  // If num_bits wasn't specified, update it
+                num_bits = max_stride_pages;
+            }
+        }
+    }
+    
     if (num_bits == 0) {
         fprintf(stderr, "Error: num_bits is 0\n");
         close(f_map);
@@ -142,10 +158,10 @@ int main(int argc, char *argv[])
         fprintf(stderr, "File size: %ld bytes\n", f_map_stat.st_size);
         fprintf(stderr, "Page size: %zu bytes\n", pg_size);
         fprintf(stderr, "Total pages: %zu\n", file_pgs);
+        fprintf(stderr, "Page stride: %zu\n", page_stride);
         fprintf(stderr, "Max strided pages: %zu\n", max_stride_pages);
         fprintf(stderr, "Testing bits: %zu\n", num_bits);
         fprintf(stderr, "Cycle threshold: %lu\n", cycle_threshold);
-        fprintf(stderr, "Page stride: %d\n", PAGE_STRIDE);
     }
     
     // Arrays to store results
@@ -169,7 +185,7 @@ int main(int argc, char *argv[])
     
     // Measure each strided page
     for (size_t bit_idx = 0; bit_idx < num_bits; bit_idx++) {
-        size_t page_num = bit_idx * PAGE_STRIDE;
+        size_t page_num = bit_idx * page_stride;
         uint64_t read_ns_val = 0;
         
         uint64_t cycles = measure_page_access_cycles(f_map, pg_size, buff, page_num, &read_ns_val);
@@ -221,11 +237,11 @@ int main(int argc, char *argv[])
     uint64_t avg_cycles = num_bits > 0 ? total_cycles / num_bits : 0;
     uint64_t avg_ns = num_bits > 0 ? total_ns / num_bits : 0;
     
-    printf("%s,%zu,%zu,%d,%zu,%lu,%lu,%lu,%lu,%lu,%lu,",
+    printf("%s,%zu,%zu,%zu,%zu,%lu,%lu,%lu,%lu,%lu,%lu,",
            filename,
            pg_size,
            num_bits,
-           PAGE_STRIDE,
+           page_stride,
            cached_count,
            cycle_threshold,
            min_cycles,
