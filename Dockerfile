@@ -1,5 +1,5 @@
 
-FROM nginx:1.20.1
+FROM ubuntu:latest
 
 # Switch to Debian archived repositories for EOL buster
 RUN sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
@@ -14,11 +14,16 @@ WORKDIR /workspace
 COPY . /workspace
 
 
-COPY runsc /gvisor/bin/runsc
+# COPY runsc /gvisor/bin/runsc
 
 RUN make
 
-CMD ["nginx", "-g", "daemon off;"]
+# Create test files for covert channel experiments
+# Create 8MB random files at pages 0, 32, 64, etc. for strided channel
+RUN dd if=/dev/urandom of=/workspace/rand0.bin bs=4096 count=32768 && \
+    dd if=/dev/urandom of=/workspace/rand1.bin bs=4096 count=32768
+
+CMD ["sleep", "infinity"]
 
 
 #how to build and run:
